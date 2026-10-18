@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
@@ -12,37 +9,18 @@ namespace mesadepartes2026
     public partial class Form1 : Form
     {
         private readonly List<Expediente> expedientes = new List<Expediente>();
-
-        private readonly string archivo = Path.Combine(
-            Application.StartupPath, "expedientes.txt");
+        private readonly string archivo = Path.Combine(Application.StartupPath, "expedientes.txt");
 
         public Form1()
         {
             InitializeComponent();
-
             textBox2.MaxLength = 8;
 
-            ConfigurarTabla();
-            ConectarBotones();
-            CargarExpedientes();
-            MostrarExpedientes(expedientes);
-        }
-
-        private void ConfigurarTabla()
-        {
-            // Las columnas se crean aquí para evitar que falten.
-            dataGridView1.Columns.Clear();
-            dataGridView1.Rows.Clear();
-
             dataGridView1.ReadOnly = true;
-            dataGridView1.AllowUserToAddRows = false;
-            dataGridView1.AllowUserToDeleteRows = false;
-            dataGridView1.AutoSizeColumnsMode =
-                DataGridViewAutoSizeColumnsMode.Fill;
-            dataGridView1.SelectionMode =
-                DataGridViewSelectionMode.FullRowSelect;
+            dataGridView1.AllowUserToAddRows = dataGridView1.AllowUserToDeleteRows = dataGridView1.RowHeadersVisible = false;
+            dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dataGridView1.MultiSelect = false;
-            dataGridView1.RowHeadersVisible = false;
 
             dataGridView1.Columns.Add("Codigo", "Código");
             dataGridView1.Columns.Add("Ciudadano", "Ciudadano");
@@ -50,150 +28,72 @@ namespace mesadepartes2026
             dataGridView1.Columns.Add("Tramite", "Trámite");
             dataGridView1.Columns.Add("Descripcion", "Descripción");
             dataGridView1.Columns.Add("Fecha", "Fecha de registro");
+
+            if (File.Exists(archivo))
+            {
+                string[] lineas = File.ReadAllLines(archivo, Encoding.UTF8);
+                for (int i = 0; i < lineas.Length; i++)
+                {
+                    string[] d = lineas[i].Split('|');
+                    if (d.Length == 6)
+                    {
+                        expedientes.Add(new Expediente { Codigo = d[0], Ciudadano = d[1], DNI = d[2], Tramite = d[3], Descripcion = d[4], Fecha = Convert.ToDateTime(d[5]) });
+                    }
+                }
+            }
+            MostrarTodo(expedientes);
         }
 
-        private void ConectarBotones()
+        private void MostrarTodo(List<Expediente> lista)
         {
-            // Evitar eventos duplicados.
-            button1.Click -= btnRegistrar_Click;
-            button1.Click += btnRegistrar_Click;
-
-            button2.Click -= button2_Click;
-            button2.Click += button2_Click;
-
-            button3.Click -= button3_Click;
-            button3.Click += button3_Click;
-
-            button4.Click -= button4_Click;
-            button4.Click += button4_Click;
-
-            button5.Click -= button5_Click;
-            button5.Click += button5_Click;
-
-            button6.Click -= button6_Click;
-            button6.Click += button6_Click;
+            dataGridView1.Rows.Clear();
+            for (int i = 0; i < lista.Count; i++)
+                dataGridView1.Rows.Add(lista[i].Codigo, lista[i].Ciudadano, lista[i].DNI, lista[i].Tramite, lista[i].Descripcion, lista[i].Fecha.ToString("dd/MM/yyyy HH:mm"));
         }
 
-        private void RegistrarExpediente()
+        private void Guardar()
         {
-            string ciudadano = textBox1.Text.Trim();
-            string dni = textBox2.Text.Trim();
-            string tramite = textBox3.Text.Trim();
-            string descripcion = textBox4.Text.Trim();
+            List<string> lineas = new List<string>();
+            for (int i = 0; i < expedientes.Count; i++)
+                lineas.Add(expedientes[i].Codigo + "|" + expedientes[i].Ciudadano + "|" + expedientes[i].DNI + "|" + expedientes[i].Tramite + "|" + expedientes[i].Descripcion + "|" + expedientes[i].Fecha.ToString("yyyy-MM-dd HH:mm"));
+            File.WriteAllLines(archivo, lineas, Encoding.UTF8);
+        }
 
-            if (string.IsNullOrWhiteSpace(ciudadano) ||
-                string.IsNullOrWhiteSpace(dni) ||
-                string.IsNullOrWhiteSpace(tramite) ||
-                string.IsNullOrWhiteSpace(descripcion))
+        private void btnRegistrar_Click(object sender, EventArgs e)
+        {
+            if (textBox1.Text == "" || textBox2.Text == "" || textBox3.Text == "" || textBox4.Text == "")
             {
                 MessageBox.Show("Complete todos los campos.");
                 return;
             }
-
-            if (dni.Length != 8 || !dni.All(char.IsDigit))
+            if (textBox2.Text.Length != 8)
             {
                 MessageBox.Show("El DNI debe tener exactamente 8 dígitos.");
                 return;
             }
 
-            if (new[] { ciudadano, dni, tramite, descripcion }
-                .Any(dato => dato.Contains("|")))
-            {
-                MessageBox.Show("No utilice el símbolo | en los datos.");
-                return;
-            }
-
             int mayor = 0;
-
-            foreach (Expediente exp in expedientes)
+            for (int i = 0; i < expedientes.Count; i++)
             {
-                int numero;
-
-                if (exp.Codigo.StartsWith("EXP-") &&
-                    int.TryParse(exp.Codigo.Substring(4), out numero))
-                {
-                    if (numero > mayor)
-                        mayor = numero;
-                }
+                int num = Convert.ToInt32(expedientes[i].Codigo.Substring(4));
+                if (num > mayor) mayor = num;
             }
 
-            if (mayor == int.MaxValue)
-            {
-                MessageBox.Show("No se pueden generar más códigos.");
-                return;
-            }
+            int nuevoNumero = mayor + 1;
+            string cod = "EXP-" + nuevoNumero.ToString("D4");
 
-            Expediente nuevo = new Expediente
-            {
-                Codigo = "EXP-" + (mayor + 1).ToString("D4"),
-                Ciudadano = ciudadano,
-                DNI = dni,
-                Tramite = tramite,
-                Descripcion = descripcion,
-                Fecha = DateTime.Now
-            };
-
-            expedientes.Add(nuevo);
-
-            if (!GuardarExpedientes())
-            {
-                expedientes.Remove(nuevo);
-                return;
-            }
-
-            MostrarExpedientes(expedientes);
-
-            MessageBox.Show(
-                "Expediente registrado correctamente.\nCódigo: " +
-                nuevo.Codigo);
-
-            LimpiarCampos();
+            expedientes.Add(new Expediente { Codigo = cod, Ciudadano = textBox1.Text, DNI = textBox2.Text, Tramite = textBox3.Text, Descripcion = textBox4.Text, Fecha = DateTime.Now });
+            Guardar();
+            MostrarTodo(expedientes);
+            MessageBox.Show("Registrado correctamente. Código: " + cod);
+            textBox1.Clear(); textBox2.Clear(); textBox3.Clear(); textBox4.Clear(); textBox1.Focus();
         }
 
-        private void MostrarExpedientes(List<Expediente> lista)
-        {
-            dataGridView1.Rows.Clear();
+        private void label1_Click(object sender, EventArgs e) { }
+        private void label2_Click(object sender, EventArgs e) { }
+        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e) { }
 
-            foreach (Expediente exp in lista)
-            {
-                dataGridView1.Rows.Add(
-                    exp.Codigo,
-                    exp.Ciudadano,
-                    exp.DNI,
-                    exp.Tramite,
-                    exp.Descripcion,
-                    exp.Fecha.ToString("dd/MM/yyyy HH:mm"));
-            }
-        }
-
-        private void BuscarExpediente()
-        {
-            string codigo = textBox5.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(codigo))
-            {
-                MessageBox.Show("Escriba el código del expediente.");
-                textBox5.Focus();
-                return;
-            }
-
-            Expediente encontrado = expedientes.Find(
-                exp => string.Equals(
-                    exp.Codigo,
-                    codigo,
-                    StringComparison.OrdinalIgnoreCase));
-
-            if (encontrado == null)
-            {
-                dataGridView1.Rows.Clear();
-                MessageBox.Show("No se encontró el expediente.");
-                return;
-            }
-
-            MostrarExpedientes(new List<Expediente> { encontrado });
-        }
-
-        private void LimpiarCampos()
+        private void button2_Click_1(object sender, EventArgs e)
         {
             textBox1.Clear();
             textBox2.Clear();
@@ -202,155 +102,71 @@ namespace mesadepartes2026
             textBox1.Focus();
         }
 
-        private void EliminarTodosExpedientes()
+        private void button3_Click_1(object sender, EventArgs e)
         {
             if (expedientes.Count == 0)
             {
                 MessageBox.Show("No hay expedientes para eliminar.");
                 return;
             }
-
-            DialogResult respuesta = MessageBox.Show(
-                "¿Desea eliminar todos los expedientes?",
-                "Confirmar eliminación",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (respuesta != DialogResult.Yes)
-                return;
-
-            List<Expediente> copia = new List<Expediente>(expedientes);
-            expedientes.Clear();
-
-            if (GuardarExpedientes())
+            if (MessageBox.Show("¿Eliminar todo?", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                MostrarExpedientes(expedientes);
-                LimpiarCampos();
+                expedientes.Clear();
+                Guardar();
+                MostrarTodo(expedientes);
                 textBox5.Clear();
-
-                MessageBox.Show("Todos los expedientes fueron eliminados.");
-            }
-            else
-            {
-                expedientes.AddRange(copia);
-                MostrarExpedientes(expedientes);
             }
         }
 
-        private bool GuardarExpedientes()
+        private void button4_Click_1(object sender, EventArgs e)
         {
-            try
+            string codigoBuscar = textBox5.Text.Trim();
+            if (codigoBuscar == "")
             {
-                List<string> lineas = new List<string>();
-
-                foreach (Expediente exp in expedientes)
-                {
-                    lineas.Add(string.Join("|",
-                        exp.Codigo,
-                        exp.Ciudadano,
-                        exp.DNI,
-                        exp.Tramite,
-                        exp.Descripcion,
-                        exp.Fecha.ToString(
-                            "yyyy-MM-dd HH:mm",
-                            CultureInfo.InvariantCulture)));
-                }
-
-                File.WriteAllLines(archivo, lineas, Encoding.UTF8);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    "Error al guardar los expedientes:\n" + ex.Message);
-                return false;
-            }
-        }
-
-        private void CargarExpedientes()
-        {
-            if (!File.Exists(archivo))
+                MessageBox.Show("Escriba el código del expediente.");
                 return;
+            }
 
-            try
+            bool encontrado = false;
+            for (int i = 0; i < expedientes.Count; i++)
             {
-                foreach (string linea in File.ReadAllLines(archivo, Encoding.UTF8))
+                if (expedientes[i].Codigo.ToLower() == codigoBuscar.ToLower())
                 {
-                    string[] datos = linea.Split('|');
-
-                    if (datos.Length != 6 ||
-                        datos[2].Length != 8 ||
-                        !datos[2].All(char.IsDigit))
-                        continue;
-
-                    DateTime fecha;
-
-                    if (!DateTime.TryParse(
-                        datos[5],
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out fecha) &&
-                        !DateTime.TryParse(datos[5], out fecha))
-                        continue;
-
-                    if (expedientes.Exists(exp => exp.Codigo == datos[0]))
-                        continue;
-
-                    expedientes.Add(new Expediente
-                    {
-                        Codigo = datos[0],
-                        Ciudadano = datos[1],
-                        DNI = datos[2],
-                        Tramite = datos[3],
-                        Descripcion = datos[4],
-                        Fecha = fecha
-                    });
+                    List<Expediente> resultado = new List<Expediente>();
+                    resultado.Add(expedientes[i]);
+                    MostrarTodo(resultado);
+                    encontrado = true;
+                    break;
                 }
             }
-            catch (Exception ex)
+
+            if (encontrado == false)
             {
-                MessageBox.Show(
-                    "Error al cargar los expedientes:\n" + ex.Message);
+                MessageBox.Show("No se encontró el expediente.");
             }
         }
 
-        private void btnRegistrar_Click(object sender, EventArgs e)
+        private void button5_Click_1(object sender, EventArgs e)
         {
-            RegistrarExpediente();
+            MostrarTodo(expedientes);
         }
 
-        private void button2_Click(object sender, EventArgs e)
+        private void button6_Click_1(object sender, EventArgs e)
         {
-            LimpiarCampos();
+            for (int i = 0; i < expedientes.Count - 1; i++)
+            {
+                for (int j = i + 1; j < expedientes.Count; j++)
+                {
+                    if (expedientes[i].Codigo.CompareTo(expedientes[j].Codigo) > 0)
+                    {
+                        Expediente temporal = expedientes[i];
+                        expedientes[i] = expedientes[j];
+                        expedientes[j] = temporal;
+                    }
+                }
+            }
+            MostrarTodo(expedientes);
         }
-
-        private void button3_Click(object sender, EventArgs e)
-        {
-            EliminarTodosExpedientes();
-        }
-
-        private void button4_Click(object sender, EventArgs e)
-        {
-            BuscarExpediente();
-        }
-
-        private void button5_Click(object sender, EventArgs e)
-        {
-            MostrarExpedientes(expedientes);
-        }
-
-        private void button6_Click(object sender, EventArgs e)
-        {
-            BuscarExpediente();
-        }
-
-        private void label1_Click(object sender, EventArgs e) { }
-
-        private void label2_Click(object sender, EventArgs e) { }
-
-        private void dataGridView1_CellContentClick(
-            object sender, DataGridViewCellEventArgs e)
-        { }
     }
 
     public class Expediente
